@@ -1,160 +1,69 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import {
-  Activity,
-  ArrowUpRight,
-  Bell,
-  Bot,
-  ChevronDown,
-  CircleHelp,
-  Clock3,
-  Command,
-  Copy,
-  Crown,
-  Gift,
-  Hash,
-  Layers3,
-  LayoutDashboard,
-  LogIn,
-  LogOut,
-  MessageSquareText,
-  MoreHorizontal,
-  Palette,
-  Plus,
-  Radio,
-  Search,
-  Settings2,
-  ShieldCheck,
-  Sparkles,
-  TerminalSquare,
-  Trophy,
-  UsersRound,
-  X,
-  Zap,
-} from 'lucide-react';
+import { ArrowUpRight, BookOpen, Check, ChevronRight, CircleHelp, Clipboard, Command, Crown, Gift, Hash, Menu, MessageCircle, Search, Settings2, ShieldCheck, Sparkles, TerminalSquare, X, Zap } from 'lucide-react';
 import './styles.css';
 
-const commands = [
-  { name: 'kick', description: 'Remove a member from the server', category: 'Moderation', icon: ShieldCheck, tone: 'blue', usage: ',kick @member [reason]' },
-  { name: 'ban', description: 'Permanently ban a member', category: 'Moderation', icon: ShieldCheck, tone: 'rose', usage: ',ban @member [reason]' },
-  { name: 'timeout', description: 'Temporarily restrict a member', category: 'Moderation', icon: Clock3, tone: 'amber', usage: ',timeout @member 10m' },
-  { name: 'purge', description: 'Instantly delete recent messages', category: 'Moderation', icon: Layers3, tone: 'blue', usage: ',purge [amount]' },
-  { name: 'snipe', description: 'Reveal the last deleted message', category: 'Utility', icon: Radio, tone: 'violet', usage: ',snipe' },
-  { name: 'profile', description: 'Set Stellar name, bio and avatar', category: 'Appearance', icon: Palette, tone: 'blue', usage: '/stellar profile' },
-  { name: 'level', description: 'Check your server progress', category: 'Community', icon: Trophy, tone: 'amber', usage: ',level [@member]' },
-  { name: 'coinflip', description: 'Leave your next move to chance', category: 'Games', icon: Sparkles, tone: 'violet', usage: ',coinflip' },
-  { name: '8ball', description: 'Ask the cosmos a question', category: 'Fun', icon: Sparkles, tone: 'violet', usage: ',8ball [question]' },
-  { name: 'giveaway', description: 'Launch a tailored giveaway', category: 'Engagement', icon: Gift, tone: 'rose', usage: ',giveaway start' },
-];
-
-const navItems = [
-  { label: 'Overview', icon: LayoutDashboard },
-  { label: 'Commands', icon: Command },
-  { label: 'Giveaways', icon: Gift },
-  { label: 'Appearance', icon: Palette },
-  { label: 'Activity log', icon: Activity },
+const commandGroups = [
+  { name: 'Moderation', icon: ShieldCheck, tone: 'cyan', description: 'Keep your community safe and easy to manage.', commands: [
+    { name: 'kick', syntax: ',kick @member [reason]', description: 'Remove a member from the server.' },
+    { name: 'ban', syntax: ',ban @member [reason]', description: 'Permanently ban a member.' },
+    { name: 'timeout', syntax: ',timeout @member 10m', description: 'Temporarily restrict a member.' },
+    { name: 'purge', syntax: ',purge 25', description: 'Instantly delete a chosen number of messages.' },
+  ] },
+  { name: 'Community', icon: Sparkles, tone: 'peach', description: 'Give members more reasons to take part.', commands: [
+    { name: 'level', syntax: ',level [@member]', description: 'Check a member’s XP and server level.' },
+    { name: 'leaderboard', syntax: ',leaderboard', description: 'Show the most active members.' },
+    { name: '8ball', syntax: ',8ball [question]', description: 'Ask the cosmos a question.' },
+    { name: 'coinflip', syntax: ',coinflip', description: 'Leave your next move to chance.' },
+  ] },
+  { name: 'Utilities', icon: TerminalSquare, tone: 'violet', description: 'Small tools that make server life smoother.', commands: [
+    { name: 'snipe', syntax: ',snipe', description: 'Reveal the most recently deleted message.' },
+    { name: 'help', syntax: ',help', description: 'Open the full command menu in Discord.' },
+    { name: 'prefix', syntax: ',prefix ?', description: 'Change Stellar’s prefix for this server.' },
+    { name: 'profile', syntax: '/stellar profile', description: 'Set Stellar’s name, bio, and avatar per server.' },
+  ] },
+  { name: 'Engagement', icon: Gift, tone: 'green', description: 'Turn good moments into community events.', commands: [
+    { name: 'giveaway start', syntax: ',giveaway start', description: 'Start a giveaway with time, winners, and requirements.' },
+    { name: 'giveaway end', syntax: ',giveaway end [message-id]', description: 'End an active giveaway early.' },
+    { name: 'giveaway reroll', syntax: ',giveaway reroll [message-id]', description: 'Choose a new winner from an ended giveaway.' },
+  ] },
 ];
 
 function App() {
-  const [session, setSession] = useState(null);
-  const [sessionLoading, setSessionLoading] = useState(true);
-  const [activeNav, setActiveNav] = useState('Overview');
-  const [prefix, setPrefix] = useState(',');
-  const [saved, setSaved] = useState(false);
-  const [showGiveaway, setShowGiveaway] = useState(false);
+  const [active, setActive] = useState('Commands');
   const [query, setQuery] = useState('');
-  const [enabled, setEnabled] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const filteredGroups = commandGroups.map((group) => ({ ...group, commands: group.commands.filter((command) => `${command.name} ${command.syntax} ${command.description}`.toLowerCase().includes(query.toLowerCase())) })).filter((group) => group.commands.length);
+  const navigate = (page) => { setActive(page); setMobileOpen(false); };
 
-  useEffect(() => {
-    fetch('/api/session').then((response) => response.json()).then((data) => setSession(data.authenticated ? data : null)).catch(() => setSession(null)).finally(() => setSessionLoading(false));
-  }, []);
-
-  if (sessionLoading) return <div className="auth-screen"><div className="brand-mark"><div className="brand-orbit"><span /></div><span>stellar</span></div><div className="auth-loading">Mapping your constellation...</div></div>;
-  if (!session) return <Landing />;
-
-  const displayName = session.user.global_name || session.user.username;
-  const servers = session.guilds || [];
-  const selectedServer = servers[0];
-  const logout = async () => { await fetch('/api/auth/logout', { method: 'POST' }); setSession(null); };
-
-  const filteredCommands = commands.filter((command) =>
-    `${command.name} ${command.description} ${command.category}`.toLowerCase().includes(query.toLowerCase()),
-  );
-
-  const savePrefix = () => {
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2400);
-  };
-
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-mark"><div className="brand-orbit"><span /></div><span>stellar</span></div>
-        <div className="workspace-switcher">
-          <div className="server-avatar">{selectedServer?.name?.charAt(0) || 'S'}</div>
-          <div className="workspace-copy"><strong>{selectedServer?.name || 'Select a server'}</strong><span>Discord server</span></div>
-          <ChevronDown size={15} />
-        </div>
-        <div className="sidebar-label">Workspace</div>
-        <nav className="primary-nav">
-          {navItems.map(({ label, icon: Icon }) => (
-            <button className={activeNav === label ? 'nav-item active' : 'nav-item'} onClick={() => setActiveNav(label)} key={label}>
-              <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{label === 'Commands' && <span className="nav-count">24</span>}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-label server-label">Your servers <Plus size={14} /></div>
-        <div className="server-list">
-          {servers.map((server, index) => <button className={index === 0 ? 'server-row selected' : 'server-row'} key={server.id}><span className={`server-dot ${['cyan', 'peach', 'green'][index % 3]}`}>{server.name.charAt(0)}</span><span>{server.name}</span>{index === 0 && <span className="live-dot" />}</button>)}
-          <button className="add-server"><Plus size={15} /> Add a server</button>
-        </div>
-        <div className="sidebar-bottom">
-          <button className="help-link"><CircleHelp size={16} /> Help center</button>
-          <div className="user-card"><div className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</div><div><strong>{displayName}</strong><span>Discord account</span></div><button className="logout-button" onClick={logout} title="Sign out"><LogOut size={15} /></button></div>
-        </div>
-      </aside>
-
-      <main className="main-content">
-        <header className="topbar"><div className="crumb"><span>{selectedServer?.name || 'Discord servers'}</span><span className="slash">/</span><strong>{activeNav}</strong></div><div className="top-actions"><button className="icon-button"><Bell size={18} /><span className="notification-dot" /></button><button className="view-server"><Hash size={15} /> View server <ArrowUpRight size={14} /></button></div></header>
-        <div className="content-wrap">
-          <section className="hero-row"><div><div className="eyebrow"><span className="eyebrow-dot" /> System online</div><h1>Good evening, {displayName}<span className="period">.</span></h1><p>Here’s what’s happening across <strong>{selectedServer?.name || 'your servers'}</strong> tonight.</p></div><button className="primary-button" onClick={() => setShowGiveaway(true)}><Gift size={16} /> Create giveaway</button></section>
-          <section className="stat-grid">
-            <StatCard icon={UsersRound} label="Members" value="12,840" delta="+8.2%" note="this month" tone="cyan" />
-            <StatCard icon={MessageSquareText} label="Messages handled" value="48.2k" delta="+12.5%" note="this week" tone="peach" />
-            <StatCard icon={Zap} label="Commands used" value="3,891" delta="+4.8%" note="this week" tone="violet" />
-            <StatCard icon={Trophy} label="XP awarded" value="128k" delta="+18.3%" note="this month" tone="green" />
-          </section>
-
-          <section className="section-heading"><div><h2>Command center</h2><p>Manage what Stellar can do in your community.</p></div><button className="text-button" onClick={() => setActiveNav('Commands')}>View all commands <ArrowUpRight size={15} /></button></section>
-          <section className="command-layout">
-            <div className="command-panel panel">
-              <div className="panel-top"><div className="panel-title"><Command size={17} /><strong>Popular commands</strong></div><div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search commands" /></div></div>
-              <div className="command-list">{filteredCommands.slice(0, 5).map(({ name, description, category, icon: Icon, tone, usage }) => <CommandRow key={name} name={name} description={description} category={category} Icon={Icon} tone={tone} usage={usage} />)}{filteredCommands.length === 0 && <div className="empty-state">No commands found in this constellation.</div>}</div>
-              <button className="panel-footer" onClick={() => setActiveNav('Commands')}>Browse command library <ArrowUpRight size={14} /></button>
-            </div>
-            <div className="settings-panel panel">
-              <div className="panel-top"><div className="panel-title"><Settings2 size={17} /><strong>Quick settings</strong></div><button className="kebab"><MoreHorizontal size={17} /></button></div>
-              <div className="setting-block"><div className="setting-heading"><div><span>Bot status</span><small>Stellar is active in this server</small></div><button aria-label="Toggle bot status" className={enabled ? 'toggle on' : 'toggle'} onClick={() => setEnabled(!enabled)}><span /></button></div><div className="status-line"><span className={enabled ? 'status-pip' : 'status-pip muted'} />{enabled ? 'Online and listening' : 'Paused for this server'}</div></div>
-              <div className="setting-block"><div className="setting-heading"><div><span>Command prefix</span><small>Use this before every command</small></div><code className="prefix-chip">{prefix}</code></div><div className="prefix-editor"><input maxLength="2" value={prefix} onChange={(event) => setPrefix(event.target.value)} aria-label="Command prefix" /><button onClick={savePrefix}>{saved ? 'Saved' : 'Save'}</button></div><div className="helper-text"><TerminalSquare size={13} /> Try <code>{prefix || ','}help</code> in your server</div></div>
-              <div className="setting-block compact-setting"><div className="setting-heading"><div><span>Server profile</span><small>Customize Stellar for this server</small></div><button className="edit-button" onClick={() => setActiveNav('Appearance')}>Edit <ArrowUpRight size={13} /></button></div><div className="profile-preview"><div className="bot-avatar"><Bot size={17} /></div><div><strong>Stellar</strong><span>your community companion</span></div><button className="copy-button" title="Copy profile name"><Copy size={14} /></button></div></div>
-            </div>
-          </section>
-
-          <section className="section-heading activity-heading"><div><h2>Recent activity</h2><p>A quiet pulse check on your community.</p></div><button className="filter-button">Last 7 days <ChevronDown size={14} /></button></section>
-          <section className="activity-panel panel"><div className="activity-chart"><div className="chart-meta"><div><strong>Community activity</strong><span>Messages and commands</span></div><div className="chart-legend"><span><i className="legend-cyan" /> Messages</span><span><i className="legend-peach" /> Commands</span></div></div><div className="chart-area"><div className="y-axis"><span>1.2k</span><span>900</span><span>600</span><span>300</span><span>0</span></div><div className="chart-lines"><span /><span /><span /><span /><div className="bars">{[42, 54, 48, 70, 61, 82, 67].map((height, index) => <div className="bar-group" key={index}><div className="bar messages" style={{ height: `${height}%` }} /><div className="bar commands" style={{ height: `${Math.max(height - 28, 18)}%` }} /></div>)}</div><div className="x-axis"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div></div></div></div><div className="activity-side"><div className="side-kicker"><Activity size={14} /> LIVE SIGNALS</div><div className="signal-number">86<span>%</span></div><strong>Healthy engagement</strong><p>Members are finding their rhythm. Keep the energy going.</p><div className="signal-line"><span style={{ width: '86%' }} /></div><div className="signal-foot"><span>0</span><span>100</span></div></div></section>
-        </div>
-      </main>
-      {showGiveaway && <GiveawayModal onClose={() => setShowGiveaway(false)} />}
-    </div>
-  );
+  return <div className="docs-shell">
+    <aside className={mobileOpen ? 'docs-sidebar open' : 'docs-sidebar'}>
+      <div className="docs-brand"><div className="brand-orbit"><span /></div><span>stellar</span><button className="mobile-close" onClick={() => setMobileOpen(false)}><X size={18} /></button></div>
+      <div className="docs-label">Documentation</div>
+      <nav className="docs-nav">
+        <button className={active === 'Overview' ? 'docs-nav-item active' : 'docs-nav-item'} onClick={() => navigate('Overview')}><BookOpen size={16} /> Overview</button>
+        <button className={active === 'Commands' ? 'docs-nav-item active' : 'docs-nav-item'} onClick={() => navigate('Commands')}><Command size={16} /> Commands <span>15</span></button>
+        <button className={active === 'Setup' ? 'docs-nav-item active' : 'docs-nav-item'} onClick={() => navigate('Setup')}><Settings2 size={16} /> Setup guide</button>
+        <button className={active === 'Permissions' ? 'docs-nav-item active' : 'docs-nav-item'} onClick={() => navigate('Permissions')}><ShieldCheck size={16} /> Permissions</button>
+      </nav>
+      <div className="docs-label docs-label-spaced">Resources</div>
+      <nav className="docs-nav"><a className="docs-nav-item" href="#faq"><CircleHelp size={16} /> FAQ</a><a className="docs-nav-item" href="https://discord.com" target="_blank" rel="noreferrer"><MessageCircle size={16} /> Community <ArrowUpRight size={13} /></a></nav>
+      <div className="docs-sidebar-bottom"><div className="online-line"><span /> Stellar is online</div><div className="docs-version">v1.0.0 · Last updated today</div></div>
+    </aside>
+    <main className="docs-main">
+      <header className="docs-topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)}><Menu size={20} /></button><div className="docs-breadcrumb"><span>Stellar docs</span><ChevronRight size={14} /><strong>{active}</strong></div><a className="top-discord" href="https://discord.com" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord <ArrowUpRight size={13} /></a></header>
+      {active === 'Overview' ? <Overview onCommands={() => navigate('Commands')} /> : active === 'Setup' ? <Setup /> : active === 'Permissions' ? <Permissions /> : <Commands groups={filteredGroups} query={query} setQuery={setQuery} />}
+    </main>
+  </div>;
 }
 
-function Landing() {
-  return <div className="auth-screen landing-screen"><div className="landing-nav"><div className="brand-mark"><div className="brand-orbit"><span /></div><span>stellar</span></div><span className="landing-status"><span className="eyebrow-dot" /> Discord control center</span></div><main className="landing-content"><div className="eyebrow"><span className="eyebrow-dot" /> Your community, in orbit</div><h1>One calm place<br />for your <em>whole</em> server.</h1><p>Connect Discord to manage moderation, engagement, giveaways, and more across every server where Stellar is installed.</p><a className="primary-button connect-button" href="/api/auth/discord"><LogIn size={16} /> Continue with Discord</a><small className="privacy-note">Stellar only requests your identity and server list. Your password is never shared.</small></main><div className="landing-orbit-card"><div><span className="card-kicker">CONNECTED COMMUNITIES</span><strong>See every server<br />in your constellation.</strong></div><div className="mini-server-stack"><span className="server-dot cyan">A</span><span className="server-dot peach">N</span><span className="server-dot green">S</span><span className="server-dot violet">+</span></div></div></div>;
-}
-
-function StatCard({ icon: Icon, label, value, delta, note, tone }) { return <div className="stat-card"><div className={`stat-icon ${tone}`}><Icon size={18} /></div><div className="stat-copy"><span>{label}</span><strong>{value}</strong><small><b>{delta}</b> {note}</small></div><div className="mini-sparkline"><i /><i /><i /><i /><i /></div></div>; }
-function CommandRow({ name, description, category, Icon, tone, usage }) { const [copied, setCopied] = useState(false); return <div className="command-row"><div className={`command-icon ${tone}`}><Icon size={16} /></div><div className="command-info"><strong>{name}</strong><span>{description}</span></div><span className="category-tag">{category}</span><button className="command-more" title={`Copy ${usage}`} onClick={() => { navigator.clipboard?.writeText(usage); setCopied(true); window.setTimeout(() => setCopied(false), 1200); }}>{copied ? <span className="copied-label">Copied</span> : <MoreHorizontal size={16} />}</button></div>; }
-function GiveawayModal({ onClose }) { return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="modal"><div className="modal-header"><div><div className="eyebrow"><Gift size={13} /> New giveaway</div><h2>Make it memorable.</h2><p>Set the rules and let Stellar handle the rest.</p></div><button className="close-button" onClick={onClose}><X size={18} /></button></div><div className="modal-form"><label>Giveaway topic<input placeholder="e.g. Nitro Classic, merch drop..." /></label><div className="form-row"><label>Duration<div className="input-with-suffix"><input defaultValue="3" /><span>days</span></div></label><label>Winners<div className="input-with-suffix"><input defaultValue="1" /><span>people</span></div></label></div><label>Requirements<input placeholder="e.g. Be a member of Astro Lounge" /></label><label>Bonus entries <div className="role-select"><Crown size={15} /><span>Add a role for 2x entries</span><ChevronDown size={15} /></div></label></div><div className="modal-actions"><button className="cancel-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onClose}><Gift size={15} /> Schedule giveaway</button></div></div></div>; }
+function Overview({ onCommands }) { return <div className="docs-content overview-content"><div className="docs-eyebrow"><span /> THE COMMUNITY BOT FOR EVERY CONSTELLATION</div><h1>Make your server<br /><em>feel stellar.</em></h1><p className="lead">Moderation, games, levels, giveaways, and the little utilities that keep your community moving.</p><div className="overview-actions"><button className="solid-button" onClick={onCommands}><Command size={16} /> Browse commands</button><button className="outline-button" onClick={() => document.getElementById('setup')?.scrollIntoView({ behavior: 'smooth' })}>Quick start <ArrowUpRight size={14} /></button></div><div className="overview-grid"><div className="overview-card card-wide"><div className="card-icon cyan-bg"><Zap size={18} /></div><span className="card-kicker">ONE PREFIX, LOTS OF POWER</span><h2>Everything starts with <code>,</code></h2><p>Stellar’s default prefix is a comma. Change it anytime with <code>,prefix ?</code> when your server needs its own rhythm.</p></div><div className="overview-card"><div className="card-icon peach-bg"><Gift size={18} /></div><span className="card-kicker">COMMUNITY EVENTS</span><h2>Giveaways without the busywork.</h2><p>Set a topic, duration, winners, requirements, and bonus roles. Stellar handles the rest.</p></div><div className="overview-card"><div className="card-icon violet-bg"><ShieldCheck size={18} /></div><span className="card-kicker">CALM MODERATION</span><h2>Clear tools for your team.</h2><p>Kick, ban, timeout, and purge from one consistent command set.</p></div></div><section className="overview-next" id="setup"><span className="card-kicker">START HERE</span><h2>Invite Stellar, then try <code>,help</code></h2><p>Once the bot is in your server, the help command gives your moderators and members a map of the whole constellation.</p></section></div>; }
+function Commands({ groups, query, setQuery }) { return <div className="docs-content commands-content"><div className="page-heading"><div><div className="docs-eyebrow"><span /> COMMAND REFERENCE</div><h1>Every command,<br /><em>within reach.</em></h1><p className="lead">Copy a command, paste it into Discord, and keep your server in orbit.</p></div><div className="command-count"><strong>15</strong><span>commands<br />documented</span></div></div><div className="command-toolbar"><div className="docs-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by command or action" /></div><div className="prefix-display"><Hash size={14} /> Default prefix <code>,</code></div></div><div className="command-groups">{groups.map((group) => <CommandGroup key={group.name} {...group} />)}{!groups.length && <div className="no-results">No commands found. Try a different search.</div>}</div></div>; }
+function CommandGroup({ name, icon: Icon, tone, description, commands }) { return <section className="command-group"><div className="group-heading"><div className={`group-icon ${tone}-bg`}><Icon size={17} /></div><div><h2>{name}</h2><p>{description}</p></div><span className="group-count">{commands.length}</span></div><div className="command-table">{commands.map((command) => <CommandItem key={command.name} {...command} />)}</div></section>; }
+function CommandItem({ name, syntax, description }) { const [copied, setCopied] = useState(false); const copy = () => { navigator.clipboard?.writeText(syntax); setCopied(true); window.setTimeout(() => setCopied(false), 1300); }; return <div className="command-item"><div className="command-name"><code>{name}</code><span>{description}</span></div><code className="command-syntax">{syntax}</code><button className="copy-command" onClick={copy}>{copied ? <><Check size={14} /> Copied</> : <><Clipboard size={14} /> Copy</>}</button></div>; }
+function Setup() { return <div className="docs-content simple-page"><div className="docs-eyebrow"><span /> GETTING STARTED</div><h1>Ready for<br /><em>liftoff.</em></h1><p className="lead">A three-minute setup for a server that feels a little more considered.</p><div className="steps"><Step number="01" title="Invite Stellar" text="Add Stellar to your Discord server with the bot and applications.commands scopes. Grant only the permissions your team needs." /><Step number="02" title="Try the essentials" text="Run ,help to see the command menu, then try ,level and ,snipe in a test channel." code=",help   ,level   ,snipe" /><Step number="03" title="Set your rhythm" text="Change the prefix with ,prefix ? or use /stellar profile to customize Stellar’s name, bio, and avatar for this server." /></div><div className="setup-note"><Crown size={16} /><div><strong>Tip for admins</strong><p>Give Stellar a dedicated bot role and keep moderation commands limited to trusted roles.</p></div></div></div>; }
+function Step({ number, title, text, code }) { return <div className="step"><span className="step-number">{number}</span><div><h2>{title}</h2><p>{text}</p>{code && <code className="step-code">{code}</code>}</div></div>; }
+function Permissions() { return <div className="docs-content simple-page"><div className="docs-eyebrow"><span /> SERVER PERMISSIONS</div><h1>Give Stellar<br /><em>the right access.</em></h1><p className="lead">Stellar works best with focused permissions. Start small, then expand as your community grows.</p><div className="permission-list"><Permission title="View Channels" detail="Lets Stellar see where commands are being used." /><Permission title="Send Messages" detail="Required for command replies, level-ups, and giveaway announcements." /><Permission title="Read Message History" detail="Allows purge, snipe, and context-aware responses to work properly." /><Permission title="Manage Messages" detail="Required for ,purge and giveaway cleanup." /><Permission title="Kick, Ban, and Moderate Members" detail="Required only if your team plans to use the moderation commands." /></div></div>; }
+function Permission({ title, detail }) { return <div className="permission"><div className="permission-check"><Check size={15} /></div><div><strong>{title}</strong><span>{detail}</span></div></div>; }
 
 createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMode>);
